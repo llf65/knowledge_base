@@ -12,3 +12,5 @@ class CsrcItem(scrapy.Item):
     report_type = scrapy.Field()
     report_title = scrapy.Field()
     pdf_url = scrapy.Field()
+    source_file_id = scrapy.Field()
+

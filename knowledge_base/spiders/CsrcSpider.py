@@ -1,3 +1,4 @@
+import hashlib
 import re
 
 import scrapy
@@ -82,7 +83,18 @@ class CsrcSpider(scrapy.Spider):
             item['project_status'] = row.xpath('td[5]/text()').get().strip() if row.xpath('td[5]/text()').get() else None
             item['agency'] = row.xpath('td[6]/text()').get().strip() if row.xpath('td[6]/text()').get() else None
             item['report_type'] = row.xpath('td[7]/text()').get().strip() if row.xpath('td[7]/text()').get() else None
-            item['report_title'] = row.xpath('td[8]/text()').get().strip() if row.xpath('td[8]/text()').get() else None
+            # item['report_title'] = row.xpath('td[8]/text()').get().strip() if row.xpath('td[8]/text()').get() else None
+            item['report_title'] = row.xpath('td[8]/@title').get() or (
+                row.xpath('td[8]/text()').get().strip() if row.xpath('td[8]/text()').get() else None)
+
+            # Clean up extracted fields
+            for field in ['securities_company', 'filing_date', 'project_status', 'agency', 'report_type',
+                          'report_title']:
+                if item[field]:
+                    item[field] = item[field].strip()
+                else:
+                    item[field] = None
+
             # 获取PDF下载链接
             pdf_url = None
 
@@ -105,6 +117,17 @@ class CsrcSpider(scrapy.Spider):
             if pdf_url:
                 item['pdf_url'] = 'http://eid.csrc.gov.cn' + pdf_url
 
+            report_title = item.get('report_title')
+            if report_title:
+                report_title = report_title.strip()
+                item['report_title'] = report_title
+                # Generate hash
+                hash_object = hashlib.md5(report_title.encode('utf-8'))
+                source_file_id = hash_object.hexdigest()
+                item['source_file_id'] = source_file_id
+            else:
+                self.logger.warning(f"Missing report_title for item: {item}")
+                continue  # or set a default value
             # 提取报告标题
             # report_title = row.xpath('td[8]/text()').get()
             # if report_title:
