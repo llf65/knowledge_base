@@ -66,19 +66,19 @@ class DatabaseManager:
             result = cursor.fetchone()
             return result is not None
 
-    def insert_failure_record(self, item, reason):
-        """
-        将失败记录插入t_download_failed表中.
-        """
-        failure_data = {
-            'title': item.get('report_title', ''),
-            'source': 'CSRC',
-            'type': 1,  # Assuming type 1 for guidance information
-            'reason': reason,
-            'create_time': 'CURRENT_TIMESTAMP',  # or appropriate timestamp
-            'regi_state': '001',
-        }
-        self.insert_into_table('t_download_failed', failure_data)
+    # def insert_failure_record(self, item, reason):
+    #     """
+    #     将失败记录插入t_download_failed表中.
+    #     """
+    #     failure_data = {
+    #         'title': item.get('report_title', ''),
+    #         'source': 'CSRC',
+    #         'type': 1,  # Assuming type 1 for guidance information
+    #         'reason': reason,
+    #         'create_time': 'CURRENT_TIMESTAMP',  # or appropriate timestamp
+    #         'regi_state': '001',
+    #     }
+    #     self.insert_into_table('t_download_failed', failure_data)
 
     def close(self):
         self.connection.close()
