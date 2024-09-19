@@ -1,4 +1,4 @@
-# items.py
+# knowledge_base/items/CsrcItem.py
 import scrapy
 
 
@@ -13,4 +13,7 @@ class CsrcItem(scrapy.Item):
     report_title = scrapy.Field()
     pdf_url = scrapy.Field()
     source_file_id = scrapy.Field()
+    file_id = scrapy.Field()
+    logic_knowledge_id = scrapy.Field()
+    serial_no = scrapy.Field()
 

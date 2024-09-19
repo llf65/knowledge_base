@@ -41,12 +41,16 @@ class DatabaseManager:
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql, tuple(data.values()))
-            self.connection.commit()
-            return True
+                last_inserted_id = cursor.lastrowid
+            # Do not commit here; transaction is managed outside
+            # self.connection.commit()
+            return last_inserted_id
         except Exception as e:
-            self.connection.rollback()
+            # Do not rollback here; transaction is managed outside
+            # self.connection.rollback()
             # Log the error as needed
-            return False
+            print(f"Error inserting into {table_name}: {e}")
+            return None  # Return None to indicate failure
 
     def check_item_exists(self, table_name, condition):
         """

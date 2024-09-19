@@ -22,7 +22,7 @@ class FileStrategy(ABC):
 class CsrcFileStrategy(FileStrategy):  # Csrc-辅导信息获取文件名称类型拓展策略
     def get_file_name(self, item):
         file_extension = self.get_file_extension(item['pdf_url'])
-        report_title = item.get('report_title', 'unknown_title').replace('/', '_')
+        report_title = item.get('report_title', ' ')
         return f"{report_title}.{file_extension}"
 
     def get_mime_type(self, item):

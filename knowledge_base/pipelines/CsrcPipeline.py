@@ -1,3 +1,4 @@
+# knowledge_base/pipelines/CsrcPipeline.py
 import logging
 import os
 from urllib.parse import urlparse, quote, urlunparse
@@ -7,6 +8,7 @@ from twisted.internet.defer import Deferred
 from twisted.internet import threads
 
 from knowledge_base.config.csrc_api_config import API_PARAMS
+from knowledge_base.constants.mappings import belong_secu_code_MAPPING, agency_area_MAPPING
 from knowledge_base.utils.FileStrategy import CsrcFileStrategy
 from knowledge_base.utils.TextExtractor import TextExtractor
 from knowledge_base.utils.db_manager import DatabaseManager
@@ -20,6 +22,7 @@ class CsrcPipeline:
         self.download_dir = os.path.join(os.getcwd(), 'downloads')
         os.makedirs(self.download_dir, exist_ok=True)
         self.logger = logging.getLogger(__name__)
+        # self.es_manager = ElasticsearchManager()  # Ensure es_manager is initialized
 
     # 特殊字符被正确编码
     def encode_url(self, url):
@@ -67,19 +70,20 @@ class CsrcPipeline:
                 cookies=cookies
             )
             if not download_success:
-                self.record_failure(db_manager, item, reason="Download failed")
+                self.record_failure(db_manager, item, reason="Download failed", fail_type='1')
                 return
 
             file_path = download_success
 
             # Step 3: Upload to WPS server
             with open(file_path, 'rb') as file_obj:
-                file_id = file_uploader.upload_file_to_wps(file_obj, item)
-            if not file_id:
-                self.record_failure(db_manager, item, reason="Upload failed")
+                fileId = file_uploader.upload_file_to_wps(file_obj, item)
+                print('file_id-->>>>', fileId)
+            if not fileId:
+                self.record_failure(db_manager, item, reason="Upload failed", fail_type='2')
                 return
 
-            item['file_id'] = file_id
+            item['file_id'] = fileId
 
             # Step 4: Insert into MySQL
             db_success = self.insert_into_database(db_manager, item)
@@ -94,9 +98,9 @@ class CsrcPipeline:
                 text_content = text_content.replace("\r\n", "\n").replace("\r", "\n")
                 # TODO 标签相关逻辑暂未定义
                 es_doc = self.construct_es_doc(item, text_content)
-                self.es_manager.index_document(index_name='knowledge_guidance', document=es_doc)
+                es_manager.index_document(index_name='knowledge_guidance', document=es_doc)
             else:
-                self.record_failure(db_manager, item, reason="Text extraction failed")
+                self.record_failure(db_manager, item, reason="Text extraction failed", fail_type='4')
 
             return item
 
@@ -110,30 +114,62 @@ class CsrcPipeline:
 
             # Insert into t_knowledge
             knowledge_data = {
-                'knowledge_id': item['knowledge_id'],
-                'knowledge_sort': item['knowledge_sort'],
+                'knowledge_sort': '174014',
+                'mannual_yn': '524002',
+                'regi_state': '010001',
+                'create_by': 'admin'
                 # Add other fields as needed
             }
-            db_manager.insert_into_table('t_knowledge', knowledge_data)
+            knowledge_id = db_manager.insert_into_table('t_knowledge', knowledge_data)
 
             # Insert into t_knowledge_content
             content_data = {
-                'knowledge_id': item['knowledge_id'],
-                'logic_knowledge_id': item['logic_knowledge_id'],
-                'guide_code': item['guide_code'],
+                'knowledge_id': knowledge_id,
                 # Add other fields as needed
+                'guide_code': 'UTF-8',  # 知识编码
+                'guide_name': item['report_title'],  # 知识标题
+                # 'guide_content': item['report_title'],  # 知识内容
+                'source': item['pdf_url'],  # 来源出处
+                # 'version': item['source_file_id'],  # 版本
+                'publication_state': '394002',  # 发布状态
+                'rele_date': item['filing_date'],  # 发布日期
+                'allow_comment_yn': '395002',  # 是否允许评论
+                'need_check_yn': '649001',  # 是否需要审核
+                'examine_status': '178001',  # 审核状态
+                # 'examine_person_id': item['source_file_id'],  # 审核人ID
+                'law_status': '831001',  # 效力状态
+                'regi_state': '010001',  # 记录状态
+                'create_by': 'admin'  # 创建用户
             }
-            db_manager.insert_into_table('t_knowledge_content', content_data)
+            logic_knowledge_id = db_manager.insert_into_table('t_knowledge_content', content_data)
+
+            # Store logic_knowledge_id in item
+            item['logic_knowledge_id'] = logic_knowledge_id
 
             # Insert into t_knowledge_content_guidance
             guidance_data = {
-                'logic_knowledge_id': item['logic_knowledge_id'],
-                'serial_no': item['serial_no'],
-                'belong_secu': item['belong_secu'],
-                'source_id': item['source_file_id'],
+                'logic_knowledge_id': logic_knowledge_id,
+                'belong_secu': belong_secu_code_MAPPING.get(item['agency'], ''),  # 所属监管局
                 # Add other fields as needed
+                'guidance_status': item['project_status'],  # 辅导状态
+                'company_name': item['company_name'],  # 公司名称
+                # 'company_simple_name': item['source_file_id'], # 公司简称
+                'area': agency_area_MAPPING.get(item['agency'], ''),  # 地域分布
+                # 'stock_code': item['source_file_id'], # 股票编码
+                'notice_type_name': item['report_type'],  # 公告类型名称
+                'file_id': item['file_id'],  # 文件ID
+                'file_name': item['report_title'],  # 文件名称
+                'source_id': item['source_file_id'],  # 源ID
+                'regi_state': '010001',  # 记录状态
+                'create_by': 'admin'  # 创建用户
             }
-            db_manager.insert_into_table('t_knowledge_content_guidance', guidance_data)
+            # db_manager.insert_into_table('t_knowledge_content_guidance', guidance_data)
+            serial_no = db_manager.insert_into_table('t_knowledge_content_guidance', guidance_data)
+
+            print("guidance_data:>>>>>>>>>>>>>>", guidance_data)
+
+            # Store serial_no in item
+            item['serial_no'] = serial_no
 
             # Commit transaction
             db_manager.connection.commit()
@@ -142,37 +178,40 @@ class CsrcPipeline:
             # Rollback transaction
             db_manager.connection.rollback()
             # Log the error
-            self.record_failure(item, str(e))
+            self.record_failure(db_manager, item, reason=str(e), fail_type='3')
             return False
 
     def construct_es_doc(self, item, text_content):
         es_doc = {
-            'logic_knowledge_id': item['logic_knowledge_id'],
-            'serial_no': item['serial_no'],
-            'belong_secu': item.get('agency', ''),
-            'guidance_status': item.get('project_status', ''),
-            'company_name': item.get('company_name', ''),
-            'company_simple_name': '',  # If available
-            'area': '',  # If available
-            'file_id': item['file_id'],
-            'file_name': item.get('file_name', ''),
-            'notice_type_name': item.get('report_type', ''),
-            'guide_name': item.get('report_title', ''),
-            'summary': '',  # If available
-            'guide_content': text_content,
-            'rele_date': item.get('filing_date', ''),
+            'logic_knowledge_id': item['logic_knowledge_id'],  # 逻辑知识ID
+            'serial_no': item['serial_no'],  # t_knowledge_content_guidance表的主键
+            'belong_secu': belong_secu_code_MAPPING.get(item['agency'], ''),  # 所属监管局
+            'guidance_status': item.get('project_status', ''),  # 辅导状态
+            'company_name': item.get('company_name', ''),  # 公司名称
+            # 'company_simple_name': '',  # If available # 公司简称
+            'area': agency_area_MAPPING.get(item['agency'], ''),  # If available # 地域分布
+            'file_id': item['file_id'],  # 文件ID
+            'file_name': item.get('report_title', ''),  # 文件名称
+            'notice_type_name': item.get('report_type', ''),  # 公告类型名称
+            'guide_name': item.get('report_title', ''),  # 知识标题
+            # 'summary': '',  # If available # 逻辑知识ID
+            'guide_content': text_content,  # 文档内容
+            'rele_date': item.get('filing_date', ''),  # 发布日期
             'create_time': '',  # Set appropriately
             'update_time': '',  # Set appropriately
-            'create_by': 'system',
-            'update_by': 'system',
+            'create_by': 'admin',
+            'update_by': 'admin',
         }
         return es_doc
 
-    def record_failure(self, db_manager, item, reason):
+    def record_failure(self, db_manager, item, reason, fail_type):
         failure_data = {
             'title': item.get('report_title', ''),
             'source': 'CSRC',
-            'type': 1,  # Assuming type 1 for guidance information
+            'file_type': 1,  # Assuming type 1 for guidance information
             'reason': reason,
+            'fail_type': fail_type,
+            'regi_state': '001001',
+            'create_by': 'admin'
         }
-        db_manager.insert_into_table('t_Download_failed', failure_data)
+        db_manager.insert_into_table('t_failed', failure_data)
