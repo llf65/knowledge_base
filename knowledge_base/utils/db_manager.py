@@ -63,26 +63,11 @@ class DatabaseManager:
 
         where_clause = ' AND '.join(f"`{key}` = %s" for key in condition.keys())
         sql = f"SELECT 1 FROM `{table_name}` WHERE {where_clause} LIMIT 1"
-        # print(sql)
 
         with self.connection.cursor() as cursor:
             cursor.execute(sql, tuple(condition.values()))
             result = cursor.fetchone()
             return result is not None
-
-    # def insert_failure_record(self, item, reason):
-    #     """
-    #     将失败记录插入t_download_failed表中.
-    #     """
-    #     failure_data = {
-    #         'title': item.get('report_title', ''),
-    #         'source': 'CSRC',
-    #         'type': 1,  # Assuming type 1 for guidance information
-    #         'reason': reason,
-    #         'create_time': 'CURRENT_TIMESTAMP',  # or appropriate timestamp
-    #         'regi_state': '001',
-    #     }
-    #     self.insert_into_table('t_download_failed', failure_data)
 
     def close(self):
         self.connection.close()

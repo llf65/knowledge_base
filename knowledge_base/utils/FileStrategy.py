@@ -1,3 +1,4 @@
+# knowledge_base/utils/FileStrategy.py
 import mimetypes
 import os
 from abc import ABC, abstractmethod

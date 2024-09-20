@@ -1,7 +1,7 @@
+import pandas as pd
 import pdfplumber
 from docx import Document
 import docx2txt
-import pandas as pd
 
 
 class TextExtractor:  # 文本提取器

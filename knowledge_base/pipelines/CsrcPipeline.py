@@ -91,21 +91,47 @@ class CsrcPipeline:
                 return
 
             # Step 5: Extract text and insert into Elasticsearch
-            file_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
-            with open(file_path, 'rb') as file_obj:
-                text_content = TextExtractor.extract_text(file_obj, file_ext)
-            if text_content:
-                text_content = text_content.replace("\r\n", "\n").replace("\r", "\n")
-                # TODO 标签相关逻辑暂未定义
-                es_doc = self.construct_es_doc(item, text_content)
-                es_manager.index_document(index_name='knowledge_guidance', document=es_doc)
-            else:
-                self.record_failure(db_manager, item, reason="Text extraction failed", fail_type='4')
+            # file_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
+            # file_ext = file_strategy.get_file_extension(item['pdf_url'])
+            #
+            # with open(file_path, 'rb') as file_obj:
+            #     text_content = TextExtractor.extract_text(file_obj, file_ext)
+            # if text_content:
+            #     text_content = text_content.replace("\ra\n", "\n").replace("\r", "\n")
+            #     # TODO 标签相关逻辑暂未定义
+            #     es_doc = self.construct_es_doc(item, text_content)
+            #     es_manager.index_document(index_name='knowledge_guidance', document=es_doc)
+            # else:
+            #     self.record_failure(db_manager, item, reason="Text extraction failed", fail_type='4')
+
+            # 将self.extract_and_index异步处理
+            d = threads.deferToThread(self.extract_and_index, file_path, item, db_manager, es_manager)
+            d.addErrback(self.handle_failure, item, db_manager)
 
             return item
 
         threads.deferToThread(_process).addCallback(deferred.callback)
         return deferred
+
+    def extract_and_index(self, file_path, item, db_manager, es_manager):
+        try:
+            file_ext = os.path.splitext(file_path)[1].lstrip('.').lower()
+            with open(file_path, 'rb') as file_obj:
+                text_content = TextExtractor.extract_text(file_obj, file_ext)
+            if text_content:
+                text_content = text_content.replace("\r\n", "\n").replace("\r", "\n")
+                es_doc = self.construct_es_doc(item, text_content)
+                es_manager.index_document(index_name='knowledge_guidance', document=es_doc)
+            else:
+                reason = "Text extraction failed: No content extracted"
+                self.record_failure(db_manager, item, reason=reason, fail_type='4')
+        except Exception as e:
+            reason = f"Text extraction and indexing error: {str(e)}"
+            self.record_failure(db_manager, item, reason=reason, fail_type='4')
+
+    def handle_failure(self, failure, item, db_manager):
+        reason = f"Unhandled exception: {str(failure.value)}"
+        self.record_failure(db_manager, item, reason=reason, fail_type='4')
 
     def insert_into_database(self, db_manager, item):
         try:
@@ -163,10 +189,7 @@ class CsrcPipeline:
                 'regi_state': '010001',  # 记录状态
                 'create_by': 'admin'  # 创建用户
             }
-            # db_manager.insert_into_table('t_knowledge_content_guidance', guidance_data)
             serial_no = db_manager.insert_into_table('t_knowledge_content_guidance', guidance_data)
-
-            print("guidance_data:>>>>>>>>>>>>>>", guidance_data)
 
             # Store serial_no in item
             item['serial_no'] = serial_no

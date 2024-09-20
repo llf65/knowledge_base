@@ -161,7 +161,7 @@ LOGGING = {
         '': {  # Root logger
             'handlers': ['file_handler'],
             'level': 'ERROR',
-            'propagate': True,
+            'propagate': False,
         },
     },
 }

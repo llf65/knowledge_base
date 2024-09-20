@@ -18,19 +18,19 @@ class FileUploader:
         headers = api_config['upload_headers']
         data = api_config['upload_data']
 
-        # Build file name and correct MIME type
+        # 生成文件名和MIME类型
         file_name = self.strategy.get_file_name(item)
         mime_type = self.strategy.get_mime_type(item)
 
         for attempt in range(max_retries):
             try:
-                # Reset file pointer to the beginning before each attempt
+                # 每次尝试前将文件指针重置到开头
                 file_obj.seek(0)
 
                 # Prepare file info
                 files = {'file': (file_name, file_obj, mime_type)}
 
-                # Send POST request to upload the file
+                # 发送POST请求以上传文件
                 response = requests.post(upload_url, headers=headers, files=files, data=data)
                 if response.status_code == 200:
                     try:
@@ -48,7 +48,7 @@ class FileUploader:
             except requests.RequestException as e:
                 self.logger.error(f"Request exception when uploading {file_name}. Error: {str(e)}")
 
-            # If upload failed, wait before retrying
+            # 如果上传失败，等待重试
             if attempt < max_retries - 1:
                 sleep_time = backoff_factor * (2 ** attempt)
                 self.logger.info(f"Retrying upload for {file_name} in {sleep_time} seconds...")
